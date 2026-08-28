@@ -6,7 +6,7 @@ const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
 // Admin ID raqamingizni shu yerga kiriting
-const ADMIN_ID = 7834222012; // <-- O'z Telegram ID ingizni qo'ying
+const ADMIN_ID = 7759134597; // <-- O'z Telegram ID ingizni qo'ying
 
 // Render porti
 const port = process.env.PORT || 3000;
