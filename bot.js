@@ -1,151 +1,106 @@
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const { Telegraf, Markup } = require('telegraf');
-
-const questions = require('./questions.js');
-const PROGRESS_FILE = path.join(__dirname, 'progress.json');
-const PASS_PERCENT = 60; // Darajadan o'tish uchun kerak bo'lgan foiz
-const MAX_LEVEL = Math.max(...Object.keys(questions).map(Number));
-
-const bot = new Telegraf(process.env.BOT_TOKEN);
-
-// ---------- Progress saqlash (oddiy JSON fayl orqali) ----------
-function loadProgress() {
-  if (!fs.existsSync(PROGRESS_FILE)) return {};
-  return JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf-8'));
-}
-
-function saveProgress(data) {
-  fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
-}
-
-function getUser(ctx) {
-  const data = loadProgress();
-  const id = String(ctx.from.id);
-  if (!data[id]) {
-    data[id] = {
-      name: ctx.from.first_name || 'O\'quvchi',
-      level: 1,
-      qIndex: 0,
-      correct: 0
-    };
-    saveProgress(data);
-  }
-  return { data, id, user: data[id] };
-}
-
-// ---------- Savol yuborish ----------
-async function sendQuestion(ctx) {
-  const { data, id, user } = getUser(ctx);
-  const levelQuestions = questions[user.level];
-
-  if (!levelQuestions) {
-    await ctx.reply(`🎉 Tabriklaymiz, ${user.name}! Siz barcha darajalarni tugatdingiz!`);
-    return;
-  }
-
-  const q = levelQuestions[user.qIndex];
-  const buttons = q.options.map((opt, i) =>
-    Markup.button.callback(opt, `ans_${user.level}_${user.qIndex}_${i}`)
-  );
-
-  await ctx.reply(
-    `📘 Daraja ${user.level} — Savol ${user.qIndex + 1}/${levelQuestions.length}\n\n${q.question}`,
-    Markup.inlineKeyboard(buttons, { columns: 1 })
-  );
-}
-
-// ---------- /start ----------
-bot.start(async (ctx) => {
-  const { user } = getUser(ctx);
-  await ctx.reply(
-    `Assalomu alaykum, ${user.name}! 👋\nKurs botiga xush kelibsiz.\nHozir Daraja ${user.level} dan boshlaymiz.`
-  );
-  await sendQuestion(ctx);
-});
-
-// ---------- /progress ----------
-bot.command('progress', async (ctx) => {
-  const { user } = getUser(ctx);
-  const total = questions[user.level] ? questions[user.level].length : 0;
-  await ctx.reply(
-    `📊 Sizning holatingiz:\nDaraja: ${user.level}\nSavol: ${user.qIndex + 1}/${total}\nTo'g'ri javoblar (shu darajada): ${user.correct}`
-  );
-});
-
-// ---------- Javob tanlanganda ----------
-bot.action(/^ans_(\d+)_(\d+)_(\d+)$/, async (ctx) => {
-  const level = Number(ctx.match[1]);
-  const qIndex = Number(ctx.match[2]);
-  const chosen = Number(ctx.match[3]);
-
-  const { data, id, user } = getUser(ctx);
-
-  // Eskirgan tugma bosilsa (foydalanuvchi allaqachon boshqa savolda) e'tiborsiz qoldiramiz
-  if (user.level !== level || user.qIndex !== qIndex) {
-    await ctx.answerCbQuery('Bu savol eskirgan.');
-    return;
-  }
-
-  const q = questions[level][qIndex];
-  const isCorrect = chosen === q.correct;
-
-  if (isCorrect) {
-    user.correct += 1;
-    await ctx.answerCbQuery('✅ To\'g\'ri!');
-  } else {
-    await ctx.answerCbQuery('❌ Noto\'g\'ri.');
-    await ctx.reply(`To'g'ri javob: ${q.options[q.correct]}`);
-  }
-
-  user.qIndex += 1;
-  const levelQuestions = questions[level];
-
-  if (user.qIndex >= levelQuestions.length) {
-    // Daraja tugadi — natijani hisoblaymiz
-    const percent = Math.round((user.correct / levelQuestions.length) * 100);
-
-    if (percent >= PASS_PERCENT && level < MAX_LEVEL && questions[level + 1]) {
-      await ctx.reply(
-        `🏁 Daraja ${level} tugadi! Natija: ${percent}%\n✅ O'tdingiz! Endi Daraja ${level + 1} boshlanadi.`
-      );
-      user.level += 1;
-      user.qIndex = 0;
-      user.correct = 0;
-    } else if (percent >= PASS_PERCENT) {
-      await ctx.reply(`🎉 Tabriklaymiz, ${user.name}! Siz barcha darajalarni muvaffaqiyatli tugatdingiz! Natija: ${percent}%`);
-    } else {
-      await ctx.reply(
-        `🏁 Daraja ${level} tugadi! Natija: ${percent}%\n❌ O'tolmadingiz (kamida ${PASS_PERCENT}% kerak). Bu darajani qaytadan boshlaymiz.`
-      );
-      user.qIndex = 0;
-      user.correct = 0;
-    }
-
-    data[id] = user;
-    saveProgress(data);
-
-    if (questions[user.level]) {
-      await sendQuestion(ctx);
-    }
-  } else {
-    data[id] = user;
-    saveProgress(data);
-    await sendQuestion(ctx);
-  }
-});
-
-bot.launch();
-console.log('Bot ishga tushdi...');
-
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
+const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
+const questions = require('./questions');
 
+const token = process.env.BOT_TOKEN;
+const bot = new TelegramBot(token, { polling: true });
+
+// Render o'chirib qo'ymasligi uchun port yaratamiz
 const port = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Bot is running online!\n');
+  res.end('Bot is running!\n');
 }).listen(port);
+
+const userState = {};
+
+// /start buyrug'i kelganda
+bot.onText(/\/start/, (msg) => {
+  const chatId = msg.chat.id;
+  delete userState[chatId]; // Holatni tozalash
+
+  const options = {
+    reply_markup: {
+      keyboard: [
+        [{ text: "📐 Matematika" }, { text: "🇬🇧 Ingliz tili" }],
+        [{ text: "🇷🇺 Rus tili" }]
+      ],
+      resize_keyboard: true
+    }
+  };
+
+  bot.sendMessage(chatId, `Assalomu alaykum, ${msg.from.first_name}! 🖐\n\nTest topshirmoqchi bo'lgan yo'nalishingizni tanlang:`, options);
+});
+
+// Xabarlar kelganda
+bot.on('message', (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+
+  // Agar start buyrug'i bo'lsa, bu yerda ishlamaydi
+  if (text === '/start') return;
+
+  if (text === "📐 Matematika") {
+    startTest(chatId, 'math');
+  } else if (text === "🇬🇧 Ingliz tili") {
+    startTest(chatId, 'english');
+  } else if (text === "🇷🇺 Rus tili") {
+    startTest(chatId, 'russian');
+  } else if (userState[chatId]) {
+    checkAnswer(chatId, text);
+  }
+});
+
+function startTest(chatId, subject) {
+  userState[chatId] = {
+    subject: subject,
+    index: 0,
+    score: 0
+  };
+  sendQuestion(chatId);
+}
+
+function sendQuestion(chatId) {
+  const state = userState[chatId];
+  const currentQuestions = questions[state.subject];
+
+  if (state.index < currentQuestions.length) {
+    const q = currentQuestions[state.index];
+    const opts = {
+      reply_markup: {
+        keyboard: q.options.map(opt => [{ text: opt }]),
+        resize_keyboard: true
+      }
+    };
+    bot.sendMessage(chatId, `❓ ${state.index + 1}-savol: ${q.question}`, opts);
+  } else {
+    bot.sendMessage(chatId, `🎉 Test yakunlandi!\n\nSizning natijangiz: ${state.score} / ${currentQuestions.length}\n\nYana test ishlash uchun yo'nalishni tanlang:`, {
+      reply_markup: {
+        keyboard: [
+          [{ text: "📐 Matematika" }, { text: "🇬🇧 Ingliz tili" }],
+          [{ text: "🇷🇺 Rus tili" }]
+        ],
+        resize_keyboard: true
+      }
+    });
+    delete userState[chatId];
+  }
+}
+
+function checkAnswer(chatId, text) {
+  const state = userState[chatId];
+  const currentQuestions = questions[state.subject];
+  const q = currentQuestions[state.index];
+
+  if (text === q.answer) {
+    state.score++;
+    bot.sendMessage(chatId, "✅ To'g'ri!");
+  } else if (q.options.includes(text)) {
+    bot.sendMessage(chatId, `❌ Noto'g'ri. To'g'ri javob: ${q.answer}`);
+  } else {
+    return;
+  }
+
+  state.index++;
+  sendQuestion(chatId);
+}
