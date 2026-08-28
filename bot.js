@@ -252,7 +252,7 @@ Davom eting va yutuqlarga erishing! 💪`;
     parse_mode: 'Markdown',
     ...getMainMenu()
   });
-}
+
 
 // ============= TEST BOSHLASH =============
 function startTest(chatId, subject, level) {
