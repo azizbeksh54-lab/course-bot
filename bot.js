@@ -5,19 +5,19 @@ const questions = require('./questions');
 const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-// Render o'chirib qo'ymasligi uchun port yaratamiz
+// Render xatolik bermasligi uchun server
 const port = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Bot is running!\n');
+  res.end('Bot ishlamoqda!\n');
 }).listen(port);
 
 const userState = {};
 
-// /start buyrug'i kelganda
+// /start buyrug'i
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  delete userState[chatId]; // Holatni tozalash
+  delete userState[chatId];
 
   const options = {
     reply_markup: {
@@ -29,15 +29,14 @@ bot.onText(/\/start/, (msg) => {
     }
   };
 
-  bot.sendMessage(chatId, `Assalomu alaykum, ${msg.from.first_name}! 🖐\n\nTest topshirmoqchi bo'lgan yo'nalishingizni tanlang:`, options);
+  bot.sendMessage(chatId, "Assalomu alaykum! Test topshirmoqchi bo'lgan yo'nalishingizni tanlang:", options);
 });
 
-// Xabarlar kelganda
+// Xabarlarni tekshirish
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  // Agar start buyrug'i bo'lsa, bu yerda ishlamaydi
   if (text === '/start') return;
 
   if (text === "📐 Matematika") {
@@ -72,9 +71,9 @@ function sendQuestion(chatId) {
         resize_keyboard: true
       }
     };
-    bot.sendMessage(chatId, `❓ ${state.index + 1}-savol: ${q.question}`, opts);
+    bot.sendMessage(chatId, `${state.index + 1}-savol: ${q.question}`, opts);
   } else {
-    bot.sendMessage(chatId, `🎉 Test yakunlandi!\n\nSizning natijangiz: ${state.score} / ${currentQuestions.length}\n\nYana test ishlash uchun yo'nalishni tanlang:`, {
+    bot.sendMessage(chatId, "Test yakunlandi!\n\nSizning natijangiz: " + state.score + " / " + currentQuestions.length, {
       reply_markup: {
         keyboard: [
           [{ text: "📐 Matematika" }, { text: "🇬🇧 Ingliz tili" }],
@@ -94,9 +93,9 @@ function checkAnswer(chatId, text) {
 
   if (text === q.answer) {
     state.score++;
-    bot.sendMessage(chatId, "✅ To'g'ri!");
+    bot.sendMessage(chatId, "To'g'ri javob!");
   } else if (q.options.includes(text)) {
-    bot.sendMessage(chatId, `❌ Noto'g'ri. To'g'ri javob: ${q.answer}`);
+    bot.sendMessage(chatId, "Noto'g'ri javob. To'g'ri javob: " + q.answer);
   } else {
     return;
   }
