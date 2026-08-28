@@ -195,6 +195,40 @@ function showProfile(chatId) {
   else if (accuracy >= 60) level = "⭐ O'rtacha";
   else if (accuracy >= 40) level = "📚 O'rganuvchi";
 
+  const text = `<b>👤 FOYDALANUVCHI PROFILI</b>
+━━━━━━━━━━━━━━━
+
+📝 <b>Ism:</b> ${user.name}
+👤 <b>Username:</b> ${usernameText}
+📅 <b>Qo'shilgan:</b> ${user.joinedDate}
+
+📊 <b>STATISTIKA:</b>
+✅ Ishlangan testlar: ${user.testsPassed} ta
+⭐ Umumiy ball: ${user.totalScore} ball
+✓ To'g'ri javoblar: ${user.correctAnswers} ta
+✗ Noto'g me'yorida javoblar: ${user.wrongAnswers} ta
+📈 Aniqlik: ${accuracy}%
+
+🏅 <b>Daraja:</b> ${level}
+
+━━━━━━━━━━━━━━━
+Davom eting va yutuqlarga erishing! 💪`;
+
+  bot.sendMessage(chatId, text, { 
+    parse_mode: 'HTML',
+    ...getMainMenu()
+  });
+}
+
+  const usernameText = user.username ? `@${user.username}` : "Mavjud emas";
+  const totalQuestions = user.correctAnswers + user.wrongAnswers;
+  const accuracy = totalQuestions > 0 ? Math.round((user.correctAnswers / totalQuestions) * 100) : 0;
+
+  let level = "🔰 Boshlang'ich";
+  if (accuracy >= 80) level = "🏆 Mutaxassis";
+  else if (accuracy >= 60) level = "⭐ O'rtacha";
+  else if (accuracy >= 40) level = "📚 O'rganuvchi";
+
   const text = `👤 *FOYDALANUVCHI PROFILI*
 ━━━━━━━━━━━━━━━
 
