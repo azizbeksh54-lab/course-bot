@@ -57,7 +57,7 @@ bot.onText(/\/start/, (msg) => {
   if (!userStats[chatId]) {
     userStats[chatId] = {
       name: msg.from.first_name || "Foydalanuvchi",
-      username: msg.from.username ? msg.from.username.replace(/_/g, '\\_') : null,
+      username: msg.from.username || null,
       totalScore: 0,
       testsPassed: 0,
       correctAnswers: 0,
@@ -66,11 +66,11 @@ bot.onText(/\/start/, (msg) => {
     };
   }
 
-  const welcomeMsg = `🎯 *Assalomu alaykum, ${userStats[chatId].name}!* 
+  const welcomeMsg = `<b>🎯 Assalomu alaykum, ${userStats[chatId].name}!</b>
 
 Botimizga xush kelibsiz! 👋
 
-📚 *Mavjud fanlar:*
+<b>📚 Mavjud fanlar:</b>
 • 📐 Matematika
 • 🇬🇧 Ingliz tili
 • 🇷🇺 Rus tili
@@ -78,13 +78,13 @@ Botimizga xush kelibsiz! 👋
 • 🌍 Geografiya
 • 📜 Tarix
 
-Har bir fanda *3 xil daraja* mavjud:
+Har bir fanda <b>3 xil daraja</b> mavjud:
 🔰 Oson | ⚡ O'rta | 🔥 Qiyin
 
 Tanlang va bilimingizni sinab ko'ring! 💪`;
 
   bot.sendMessage(chatId, welcomeMsg, { 
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     ...getMainMenu()
   });
 });
@@ -100,8 +100,8 @@ bot.on('message', (msg) => {
   if (text === "🔙 Asosiy menyu") {
     delete userState[chatId];
     delete userSubjects[chatId];
-    bot.sendMessage(chatId, "🏠 *Asosiy menyuga qaytdingiz!*", { 
-      parse_mode: 'Markdown',
+    bot.sendMessage(chatId, "<b>🏠 Asosiy menyuga qaytdingiz!</b>", { 
+      parse_mode: 'HTML',
       ...getMainMenu() 
     });
     return;
@@ -109,7 +109,7 @@ bot.on('message', (msg) => {
 
   if (text === "ℹ️ Yordam") {
     bot.sendMessage(chatId, 
-      `📖 *Yordam*
+      `<b>📖 Yordam</b>
 
 • Fan tanlang va testni boshlang
 • Darajani tanlang (Oson/O'rta/Qiyin/Aralash)
@@ -117,12 +117,12 @@ bot.on('message', (msg) => {
 • To'g'ri javob uchun ball olasiz
 • Profilingizda natijalaringizni ko'rishingiz mumkin
 
-📊 *Statistika:*
+<b>📊 Statistika:</b>
 • Umumiy ball: ${userStats[chatId]?.totalScore || 0}
 • Testlar soni: ${userStats[chatId]?.testsPassed || 0}
 
-🎯 *Omad tilaymiz!*`,
-      { parse_mode: 'Markdown', ...getMainMenu() }
+<b>🎯 Omad tilaymiz!</b>`,
+      { parse_mode: 'HTML', ...getMainMenu() }
     );
     return;
   }
@@ -146,8 +146,8 @@ bot.on('message', (msg) => {
   if (subjectMap[text]) {
     userSubjects[chatId] = subjectMap[text];
     const subjectName = text;
-    bot.sendMessage(chatId, `✅ *${subjectName}* tanlandi!\n\nEndi *darajani* tanlang:`, {
-      parse_mode: 'Markdown',
+    bot.sendMessage(chatId, `✅ <b>${subjectName}</b> tanlandi!\n\nEndi <b>darajani</b> tanlang:`, {
+      parse_mode: 'HTML',
       ...getSubjectMenu(subjectMap[text])
     });
     return;
@@ -206,7 +206,7 @@ function showProfile(chatId) {
 ✅ Ishlangan testlar: ${user.testsPassed} ta
 ⭐ Umumiy ball: ${user.totalScore} ball
 ✓ To'g'ri javoblar: ${user.correctAnswers} ta
-✗ Noto'g me'yorida javoblar: ${user.wrongAnswers} ta
+✗ Noto'g'ri javoblar: ${user.wrongAnswers} ta
 📈 Aniqlik: ${accuracy}%
 
 🏅 <b>Daraja:</b> ${level}
@@ -220,40 +220,6 @@ Davom eting va yutuqlarga erishing! 💪`;
   });
 }
 
-  const usernameText = user.username ? `@${user.username}` : "Mavjud emas";
-  const totalQuestions = user.correctAnswers + user.wrongAnswers;
-  const accuracy = totalQuestions > 0 ? Math.round((user.correctAnswers / totalQuestions) * 100) : 0;
-
-  let level = "🔰 Boshlang'ich";
-  if (accuracy >= 80) level = "🏆 Mutaxassis";
-  else if (accuracy >= 60) level = "⭐ O'rtacha";
-  else if (accuracy >= 40) level = "📚 O'rganuvchi";
-
-  const text = `👤 *FOYDALANUVCHI PROFILI*
-━━━━━━━━━━━━━━━
-
-📝 *Ism:* ${user.name}
-👤 *Username:* ${usernameText}
-📅 *Qo'shilgan:* ${user.joinedDate}
-
-📊 *STATISTIKA:*
-✅ Ishlangan testlar: ${user.testsPassed} ta
-⭐ Umumiy ball: ${user.totalScore} ball
-✓ To'g'ri javoblar: ${user.correctAnswers} ta
-✗ Noto'g'ri javoblar: ${user.wrongAnswers} ta
-📈 Aniqlik: ${accuracy}%
-
-🏅 *Daraja:* ${level}
-
-━━━━━━━━━━━━━━━
-Davom eting va yutuqlarga erishing! 💪`;
-
-  bot.sendMessage(chatId, text, { 
-    parse_mode: 'Markdown',
-    ...getMainMenu()
-  });
-
-
 // ============= TEST BOSHLASH =============
 function startTest(chatId, subject, level) {
   let subjectQuestions = questions[subject];
@@ -266,7 +232,6 @@ function startTest(chatId, subject, level) {
   let filteredQuestions;
   
   if (level === 'mixed') {
-    // Original savollar massivini saqlab qolish uchun nusxa olamiz
     filteredQuestions = [...subjectQuestions];
   } else {
     filteredQuestions = subjectQuestions.filter(q => q.level === level);
@@ -276,10 +241,8 @@ function startTest(chatId, subject, level) {
     }
   }
 
-  // Savollarni aralashtirish
   filteredQuestions = shuffleArray([...filteredQuestions]);
 
-  // Faqat 10 ta savol olish (yoki undan kam bo'lsa barchasini)
   if (filteredQuestions.length > 10) {
     filteredQuestions = filteredQuestions.slice(0, 10);
   }
@@ -327,7 +290,7 @@ function sendQuestion(chatId) {
 
   const message = `${progress} ${levelEmoji[state.level] || '🎯'} ${subjectEmoji[state.subject] || ''}
 
-❓ *${q.question}*
+❓ <b>${q.question}</b>
 
 Variantlardan birini tanlang:`;
 
@@ -335,9 +298,9 @@ Variantlardan birini tanlang:`;
     reply_markup: {
       keyboard: q.options.map(opt => [{ text: opt }]),
       resize_keyboard: true,
-      one_time_keyboard: true
+      one_time_keyboard: false
     },
-    parse_mode: 'Markdown'
+    parse_mode: 'HTML'
   };
 
   bot.sendMessage(chatId, message, opts);
@@ -360,10 +323,10 @@ function checkAnswer(chatId, text) {
   if (isCorrect) {
     state.score++;
     state.correct++;
-    bot.sendMessage(chatId, "✅ *To'g'ri!* 🎉", { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, "✅ <b>To'g'ri!</b> 🎉", { parse_mode: 'HTML' });
   } else {
     state.wrong++;
-    bot.sendMessage(chatId, `❌ *Noto'g'ri!*\nTo'g'ri javob: *${q.answer}*`, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, `❌ <b>Noto'g'ri!</b>\nTo'g'ri javob: <b>${q.answer}</b>`, { parse_mode: 'HTML' });
   }
 
   state.index++;
@@ -407,11 +370,11 @@ function finishTest(chatId) {
     message = "Harakat qiling! O'z ustingizda ishlang!";
   }
 
-  const resultMsg = `🎯 *Test yakunlandi!*
+  const resultMsg = `🎯 <b>Test yakunlandi!</b>
 
-${emoji} *Natija:* ${score}/${total}
-📊 *Foiz:* ${percentage}%
-💬 *Xulosa:* ${message}
+${emoji} <b>Natija:</b> ${score}/${total}
+📊 <b>Foiz:</b> ${percentage}%
+💬 <b>Xulosa:</b> ${message}
 
 ✅ To'g'ri: ${state.correct} ta
 ❌ Noto'g'ri: ${state.wrong} ta
@@ -422,7 +385,7 @@ Umumiy ballingiz: ${userStats[chatId]?.totalScore || 0}`;
   delete userSubjects[chatId];
 
   bot.sendMessage(chatId, resultMsg, { 
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     ...getMainMenu()
   });
 }
