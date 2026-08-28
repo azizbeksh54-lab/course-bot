@@ -1,12 +1,12 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
-const questions = require('./questions');
+let questions = require('./questions');
 
 const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-// Admin ID raqamingizni shu yerga kiriting
-const ADMIN_ID = 7759134597; // <-- O'z Telegram ID ingizni qo'ying
+// Admin ID raqamingiz
+const ADMIN_ID = 123456789; // <-- O'z Telegram ID ingizni yozing!
 
 // Render porti
 const port = process.env.PORT || 3000;
@@ -15,11 +15,12 @@ http.createServer((req, res) => {
   res.end('Bot online!');
 }).listen(port);
 
-// Bazasiz ma'lumotlarni saqlash (RAM)
+// Bazasiz ma'lumotlar (RAM)
 const userStats = {};
 const userState = {};
 const userSubjects = {};
 const adminState = {};
+const newQuestionDraft = {}; // Yangi savol qo'shish jarayoni uchun
 
 // Fanlarning nomlari lug'ati
 const subjectNames = {
@@ -48,8 +49,7 @@ function getMainMenu(chatId) {
   return {
     reply_markup: {
       keyboard: keyboard,
-      resize_keyboard: true,
-      one_time_keyboard: false
+      resize_keyboard: true
     }
   };
 }
@@ -63,8 +63,7 @@ function getSubjectMenu() {
         [{ text: "🔥 Qiyin" }, { text: "🎲 Aralash" }],
         [{ text: "🔙 Asosiy menyu" }]
       ],
-      resize_keyboard: true,
-      one_time_keyboard: false
+      resize_keyboard: true
     }
   };
 }
@@ -79,8 +78,7 @@ function getLeaderboardMenu() {
         [{ text: "🏆 Geografiya" }, { text: "🏆 Tarix" }],
         [{ text: "🔙 Asosiy menyu" }]
       ],
-      resize_keyboard: true,
-      one_time_keyboard: false
+      resize_keyboard: true
     }
   };
 }
@@ -91,10 +89,38 @@ function getAdminMenu() {
     reply_markup: {
       keyboard: [
         [{ text: "📊 Statistika" }, { text: "📢 Xabar yuborish" }],
+        [{ text: "➕ Yangi savol qo'shish" }, { text: "🗑 Savolni o'chirish" }],
         [{ text: "🔙 Asosiy menyu" }]
       ],
-      resize_keyboard: true,
-      one_time_keyboard: false
+      resize_keyboard: true
+    }
+  };
+}
+
+// Admin uchun fan tanlash menyusi
+function getAdminSubjectMenu() {
+  return {
+    reply_markup: {
+      keyboard: [
+        [{ text: "📐 Matematika" }, { text: "🇬🇧 Ingliz tili" }],
+        [{ text: "🇷🇺 Rus tili" }, { text: "🧩 Mantiq" }],
+        [{ text: "🌍 Geografiya" }, { text: "📜 Tarix" }],
+        [{ text: "🔙 Admin Panel" }]
+      ],
+      resize_keyboard: true
+    }
+  };
+}
+
+// Admin uchun daraja tanlash menyusi
+function getAdminLevelMenu() {
+  return {
+    reply_markup: {
+      keyboard: [
+        [{ text: "🔰 Oson" }, { text: "⚡ O'rta" }, { text: "🔥 Qiyin" }],
+        [{ text: "🔙 Admin Panel" }]
+      ],
+      resize_keyboard: true
     }
   };
 }
@@ -106,6 +132,7 @@ bot.onText(/\/start/, (msg) => {
   delete userState[chatId];
   delete userSubjects[chatId];
   delete adminState[chatId];
+  delete newQuestionDraft[chatId];
 
   if (!userStats[chatId]) {
     userStats[chatId] = {
@@ -146,25 +173,11 @@ bot.on('message', (msg) => {
 
   if (text === '/start') return;
 
-  // ===== ADMIN REKLAMA REJIMI =====
-  if (adminState[chatId] === 'WAITING_FOR_BROADCAST') {
-    if (text === "🔙 Asosiy menyu") {
-      delete adminState[chatId];
-      bot.sendMessage(chatId, "Bekor qilindi.", getMainMenu(chatId));
-      return;
-    }
-
+  // ===== ADMIN BACK TO ADMIN MENU =====
+  if (text === "🔙 Admin Panel" && chatId === ADMIN_ID) {
     delete adminState[chatId];
-    bot.sendMessage(chatId, "🚀 Xabar barcha foydalanuvchilarga yuborilmoqda...");
-    
-    let count = 0;
-    Object.keys(userStats).forEach(uId => {
-      bot.sendMessage(uId, text, { parse_mode: 'HTML' }).then(() => count++).catch(() => {});
-    });
-
-    setTimeout(() => {
-      bot.sendMessage(chatId, `✅ Xabar ${count} ta foydalanuvchiga yuborildi!`, getAdminMenu());
-    }, 2000);
+    delete newQuestionDraft[chatId];
+    bot.sendMessage(chatId, "<b>⚙️ Admin Paneli</b>", { parse_mode: 'HTML', ...getAdminMenu() });
     return;
   }
 
@@ -174,13 +187,157 @@ bot.on('message', (msg) => {
     delete userState[chatId];
     delete userSubjects[chatId];
     delete adminState[chatId];
-    bot.sendMessage(chatId, "<b>🏠 Asosiy menyuga qaytdingiz!</b>", { 
+    delete newQuestionDraft[chatId];
+    bot.sendMessage(chatId, "<b>🏠 Asosiy menyuga qaytdingiz!</b>", { parse_mode: 'HTML', ...getMainMenu(chatId) });
+    return;
+  }
+
+  // ===== ADMIN REKLAMA REJIMI =====
+  if (adminState[chatId] === 'WAITING_FOR_BROADCAST') {
+    delete adminState[chatId];
+    bot.sendMessage(chatId, "🚀 Xabar barcha foydalanuvchilarga yuborilmoqda...");
+    let count = 0;
+    Object.keys(userStats).forEach(uId => {
+      bot.sendMessage(uId, text, { parse_mode: 'HTML' }).then(() => count++).catch(() => {});
+    });
+    setTimeout(() => {
+      bot.sendMessage(chatId, `✅ Xabar ${count} ta foydalanuvchiga yuborildi!`, getAdminMenu());
+    }, 2000);
+    return;
+  }
+
+  // ===== ADMIN: SAVOL QO'SHISH BOSQICHLARI =====
+  if (adminState[chatId] === 'ADD_Q_SELECT_SUBJECT') {
+    const subjectMap = {
+      "📐 Matematika": 'math', "🇬🇧 Ingliz tili": 'english',
+      "🇷🇺 Rus tili": 'russian', "🧩 Mantiq": 'logic',
+      "🌍 Geografiya": 'geography', "📜 Tarix": 'history'
+    };
+    if (subjectMap[text]) {
+      newQuestionDraft[chatId] = { subject: subjectMap[text] };
+      adminState[chatId] = 'ADD_Q_SELECT_LEVEL';
+      bot.sendMessage(chatId, "Darajani tanlang:", getAdminLevelMenu());
+    } else {
+      bot.sendMessage(chatId, "Iltimos, tugmalardan birini tanlang!");
+    }
+    return;
+  }
+
+  if (adminState[chatId] === 'ADD_Q_SELECT_LEVEL') {
+    const levelMap = { "🔰 Oson": 'easy', "⚡ O'rta": 'medium', "🔥 Qiyin": 'hard' };
+    if (levelMap[text]) {
+      newQuestionDraft[chatId].level = levelMap[text];
+      adminState[chatId] = 'ADD_Q_ENTER_TEXT';
+      bot.sendMessage(chatId, "<b>Savol matnini kiriting:</b>\n<i>Masalan: O'zbekiston poytaxti qaysi shahar?</i>", { parse_mode: 'HTML' });
+    } else {
+      bot.sendMessage(chatId, "Iltimos, darajani tugmalardan tanlang!");
+    }
+    return;
+  }
+
+  if (adminState[chatId] === 'ADD_Q_ENTER_TEXT') {
+    newQuestionDraft[chatId].question = text;
+    adminState[chatId] = 'ADD_Q_ENTER_OPTIONS';
+    bot.sendMessage(chatId, "<b>Javob variantlarini kiriting (vergul bilan ajratib yozing):</b>\n<i>Masalan: Toshkent, Samarkand, Buxoro, Xiva</i>", { parse_mode: 'HTML' });
+    return;
+  }
+
+  if (adminState[chatId] === 'ADD_Q_ENTER_OPTIONS') {
+    const opts = text.split(',').map(o => o.trim());
+    if (opts.length < 2) {
+      bot.sendMessage(chatId, "⚠️ Kamida 2 ta variant kiriting (vergul bilan ajratilgan holda):");
+      return;
+    }
+    newQuestionDraft[chatId].options = opts;
+    adminState[chatId] = 'ADD_Q_ENTER_ANSWER';
+
+    let optButtons = opts.map(o => [{ text: o }]);
+    bot.sendMessage(chatId, "<b>To'g'ri javob variantini tanlang yoki yozing:</b>", {
       parse_mode: 'HTML',
-      ...getMainMenu(chatId) 
+      reply_markup: { keyboard: optButtons, resize_keyboard: true }
     });
     return;
   }
 
+  if (adminState[chatId] === 'ADD_Q_ENTER_ANSWER') {
+    const draft = newQuestionDraft[chatId];
+    if (!draft.options.includes(text)) {
+      bot.sendMessage(chatId, "⚠️ To'g'ri javob kiritilgan variantlar ichida bo'lishi kerak!");
+      return;
+    }
+    draft.answer = text;
+
+    // Savolni xotiraga qo'shish
+    if (!questions[draft.subject]) questions[draft.subject] = [];
+    questions[draft.subject].push({
+      id: Date.now(),
+      level: draft.level,
+      question: draft.question,
+      options: draft.options,
+      answer: draft.answer
+    });
+
+    delete adminState[chatId];
+    delete newQuestionDraft[chatId];
+
+    bot.sendMessage(chatId, "✅ <b>Yangi savol muvaffaqiyatli qo'shildi!</b>", {
+      parse_mode: 'HTML',
+      ...getAdminMenu()
+    });
+    return;
+  }
+
+  // ===== ADMIN: SAVOL O'CHIRISH =====
+  if (adminState[chatId] === 'DELETE_Q_SELECT_SUBJECT') {
+    const subjectMap = {
+      "📐 Matematika": 'math', "🇬🇧 Ingliz tili": 'english',
+      "🇷🇺 Rus tili": 'russian', "🧩 Mantiq": 'logic',
+      "🌍 Geografiya": 'geography', "📜 Tarix": 'history'
+    };
+    if (subjectMap[text]) {
+      const subj = subjectMap[text];
+      const subjQs = questions[subj] || [];
+
+      if (subjQs.length === 0) {
+        bot.sendMessage(chatId, "❌ Bu fanda hali savollar yo'q!", getAdminMenu());
+        delete adminState[chatId];
+        return;
+      }
+
+      adminState[chatId] = 'DELETE_Q_ENTER_ID';
+      let qListText = `<b>🗑 ${subjectNames[subj]} SAVOLLARI RO'YXATI:</b>\n\n`;
+      subjQs.forEach((q, idx) => {
+        qListText += `<b>${idx + 1}. [ID: ${q.id || idx}]</b> ${q.question}\n`;
+      });
+      qListText += `\nO'chirmoqchi bo'lgan savolingizning <b>tartib raqamini (1, 2, 3...)</b> yuboring:`;
+
+      newQuestionDraft[chatId] = { subject: subj, questions: subjQs };
+      bot.sendMessage(chatId, qListText, { parse_mode: 'HTML' });
+    }
+    return;
+  }
+
+  if (adminState[chatId] === 'DELETE_Q_ENTER_ID') {
+    const index = parseInt(text) - 1;
+    const draft = newQuestionDraft[chatId];
+
+    if (isNaN(index) || index < 0 || index >= draft.questions.length) {
+      bot.sendMessage(chatId, "⚠️ Noto'g'ri raqam kiritdingiz. Qaytadan urinib ko'ring:");
+      return;
+    }
+
+    const removedQ = questions[draft.subject].splice(index, 1);
+    delete adminState[chatId];
+    delete newQuestionDraft[chatId];
+
+    bot.sendMessage(chatId, `✅ <b>"${removedQ[0].question}"</b> savoli muvaffaqiyatli o'chirildi!`, {
+      parse_mode: 'HTML',
+      ...getAdminMenu()
+    });
+    return;
+  }
+
+  // ===== INFO & PROFILE =====
   if (text === "ℹ️ Yordam") {
     bot.sendMessage(chatId, 
       `<b>📖 Yordam</b>
@@ -196,13 +353,11 @@ bot.on('message', (msg) => {
     return;
   }
 
-  // ===== PROFIL =====
   if (text === "👤 Mening profilim") {
     showProfile(chatId);
     return;
   }
 
-  // ===== PESHQADAMLAR MENYUSI =====
   if (text === "🏆 Peshqadamlar") {
     bot.sendMessage(chatId, "<b>Qaysi fan bo'yicha Top-10 ni ko'rmoqchisiz?</b>", {
       parse_mode: 'HTML',
@@ -211,27 +366,18 @@ bot.on('message', (msg) => {
     return;
   }
 
-  // Top-10 Fanlar bo'yicha
   const leaderboardMap = {
-    "🏆 Matematika": 'math',
-    "🏆 Ingliz tili": 'english',
-    "🏆 Rus tili": 'russian',
-    "🏆 Mantiq": 'logic',
-    "🏆 Geografiya": 'geography',
-    "🏆 Tarix": 'history'
+    "🏆 Matematika": 'math', "🏆 Ingliz tili": 'english', "🏆 Rus tili": 'russian',
+    "🏆 Mantiq": 'logic', "🏆 Geografiya": 'geography', "🏆 Tarix": 'history'
   };
-
   if (leaderboardMap[text]) {
     showLeaderboard(chatId, leaderboardMap[text]);
     return;
   }
 
-  // ===== ADMIN PANEL =====
+  // ===== ADMIN PANEL MAIN ACTIONS =====
   if (text === "⚙️ Admin Panel" && chatId === ADMIN_ID) {
-    bot.sendMessage(chatId, "<b>⚙️ Admin Paneli</b>", {
-      parse_mode: 'HTML',
-      ...getAdminMenu()
-    });
+    bot.sendMessage(chatId, "<b>⚙️ Admin Paneli</b>", { parse_mode: 'HTML', ...getAdminMenu() });
     return;
   }
 
@@ -243,24 +389,29 @@ bot.on('message', (msg) => {
 
   if (text === "📢 Xabar yuborish" && chatId === ADMIN_ID) {
     adminState[chatId] = 'WAITING_FOR_BROADCAST';
-    bot.sendMessage(chatId, "Barcha foydalanuvchilarga yuboriladigan <b>matnni kiriting</b> (HTML formatida ham yozishingiz mumkin):", {
+    bot.sendMessage(chatId, "Barcha foydalanuvchilarga yuboriladigan <b>matnni kiriting</b>:", {
       parse_mode: 'HTML',
-      reply_markup: {
-        keyboard: [[{ text: "🔙 Asosiy menyu" }]],
-        resize_keyboard: true
-      }
+      reply_markup: { keyboard: [[{ text: "🔙 Admin Panel" }]], resize_keyboard: true }
     });
+    return;
+  }
+
+  if (text === "➕ Yangi savol qo'shish" && chatId === ADMIN_ID) {
+    adminState[chatId] = 'ADD_Q_SELECT_SUBJECT';
+    bot.sendMessage(chatId, "<b>Qaysi fanga savol qo'shmoqchisiz?</b>", { parse_mode: 'HTML', ...getAdminSubjectMenu() });
+    return;
+  }
+
+  if (text === "🗑 Savolni o'chirish" && chatId === ADMIN_ID) {
+    adminState[chatId] = 'DELETE_Q_SELECT_SUBJECT';
+    bot.sendMessage(chatId, "<b>Qaysi fandan savol o'chirmoqchisiz?</b>", { parse_mode: 'HTML', ...getAdminSubjectMenu() });
     return;
   }
 
   // ===== FAN TANLASH =====
   const subjectMap = {
-    "📐 Matematika": 'math',
-    "🇬🇧 Ingliz tili": 'english',
-    "🇷🇺 Rus tili": 'russian',
-    "🧩 Mantiq": 'logic',
-    "🌍 Geografiya": 'geography',
-    "📜 Tarix": 'history'
+    "📐 Matematika": 'math', "🇬🇧 Ingliz tili": 'english', "🇷🇺 Rus tili": 'russian',
+    "🧩 Mantiq": 'logic', "🌍 Geografiya": 'geography', "📜 Tarix": 'history'
   };
 
   if (subjectMap[text]) {
@@ -272,20 +423,12 @@ bot.on('message', (msg) => {
     return;
   }
 
-  // ===== DARAJA TANLASH =====
-  const levelMap = {
-    "🔰 Oson": 'easy',
-    "⚡ O'rta": 'medium',
-    "🔥 Qiyin": 'hard',
-    "🎲 Aralash": 'mixed'
-  };
-
+  const levelMap = { "🔰 Oson": 'easy', "⚡ O'rta": 'medium', "🔥 Qiyin": 'hard', "🎲 Aralash": 'mixed' };
   if (levelMap[text] && userSubjects[chatId]) {
     startTest(chatId, userSubjects[chatId], levelMap[text]);
     return;
   }
 
-  // ===== JAVOB TEKSHIRISH =====
   if (userState[chatId]) {
     checkAnswer(chatId, text);
   } else {
@@ -296,15 +439,9 @@ bot.on('message', (msg) => {
 // ============= PROFIL =============
 function showProfile(chatId) {
   const user = userStats[chatId] || { 
-    name: "Noma'lum", 
-    username: null,
-    totalScore: 0, 
-    testsPassed: 0,
-    correctAnswers: 0,
-    wrongAnswers: 0,
-    joinedDate: new Date().toLocaleDateString('uz-UZ')
+    name: "Noma'lum", username: null, totalScore: 0, testsPassed: 0,
+    correctAnswers: 0, wrongAnswers: 0, joinedDate: new Date().toLocaleDateString('uz-UZ')
   };
-
   const usernameText = user.username ? `@${user.username}` : "Mavjud emas";
   const totalQuestions = user.correctAnswers + user.wrongAnswers;
   const accuracy = totalQuestions > 0 ? Math.round((user.correctAnswers / totalQuestions) * 100) : 0;
@@ -316,7 +453,6 @@ function showProfile(chatId) {
 
   const text = `<b>👤 FOYDALANUVCHI PROFILI</b>
 ━━━━━━━━━━━━━━━
-
 📝 <b>Ism:</b> ${user.name}
 👤 <b>Username:</b> ${usernameText}
 📅 <b>Qo'shilgan:</b> ${user.joinedDate}
@@ -328,22 +464,14 @@ function showProfile(chatId) {
 ✗ Noto'g'ri javoblar: ${user.wrongAnswers} ta
 📈 Aniqlik: ${accuracy}%
 
-🏅 <b>Daraja:</b> ${level}
+🏅 <b>Daraja:</b> ${level}`;
 
-━━━━━━━━━━━━━━━
-Davom eting va yutuqlarga erishing! 💪`;
-
-  bot.sendMessage(chatId, text, { 
-    parse_mode: 'HTML',
-    ...getMainMenu(chatId)
-  });
+  bot.sendMessage(chatId, text, { parse_mode: 'HTML', ...getMainMenu(chatId) });
 }
 
-// ============= FANLAR BO'YICHA TOP-10 PESHQADAMLAR =============
+// ============= FANLAR BO'YICHA TOP-10 =============
 function showLeaderboard(chatId, subjectKey) {
   const users = Object.values(userStats);
-
-  // Tanlangan fan bo'yicha ballarga qarab saralash
   const sorted = users
     .filter(u => u.subjectScores && u.subjectScores[subjectKey] > 0)
     .sort((a, b) => (b.subjectScores[subjectKey] || 0) - (a.subjectScores[subjectKey] || 0))
@@ -352,69 +480,48 @@ function showLeaderboard(chatId, subjectKey) {
   const subjectName = subjectNames[subjectKey] || 'Fan';
 
   if (sorted.length === 0) {
-    bot.sendMessage(chatId, `🏆 <b>${subjectName}</b> bo'yicha hali hech kim ball to'plamadi. Birinchi bo'ling!`, { parse_mode: 'HTML' });
+    bot.sendMessage(chatId, `🏆 <b>${subjectName}</b> bo'yicha hali hech kim ball to'plamadi!`, { parse_mode: 'HTML' });
     return;
   }
 
   let text = `🏆 <b>TOP-10 PESHQADAMLAR (${subjectName})</b>\n━━━━━━━━━━━━━━━\n\n`;
-
   const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
   sorted.forEach((u, index) => {
-    const medal = medals[index];
-    const score = u.subjectScores[subjectKey] || 0;
-    text += `${medal} <b>${u.name}</b> — ${score} ball\n`;
+    text += `${medals[index]} <b>${u.name}</b> — ${u.subjectScores[subjectKey] || 0} ball\n`;
   });
 
-  bot.sendMessage(chatId, text, { 
-    parse_mode: 'HTML',
-    ...getLeaderboardMenu()
-  });
+  bot.sendMessage(chatId, text, { parse_mode: 'HTML', ...getLeaderboardMenu() });
 }
 
-// ============= TEST BOSHLASH =============
+// ============= TEST LOGIKASI =============
 function startTest(chatId, subject, level) {
   let subjectQuestions = questions[subject];
-  
   if (!subjectQuestions || subjectQuestions.length === 0) {
     bot.sendMessage(chatId, "❌ Kechirasiz, bu fan bo'yicha savollar mavjud emas!", getMainMenu(chatId));
     return;
   }
 
-  let filteredQuestions;
-  
-  if (level === 'mixed') {
-    filteredQuestions = [...subjectQuestions];
-  } else {
-    filteredQuestions = subjectQuestions.filter(q => q.level === level);
-    if (filteredQuestions.length === 0) {
-      bot.sendMessage(chatId, `❌ Bu darajada savollar mavjud emas. Iltimos, boshqa darajani tanlang!`, getSubjectMenu());
-      return;
-    }
+  let filteredQuestions = (level === 'mixed') 
+    ? [...subjectQuestions] 
+    : subjectQuestions.filter(q => q.level === level);
+
+  if (filteredQuestions.length === 0) {
+    bot.sendMessage(chatId, `❌ Bu darajada savollar mavjud emas.`, getSubjectMenu());
+    return;
   }
 
   filteredQuestions = shuffleArray([...filteredQuestions]);
-
-  if (filteredQuestions.length > 10) {
-    filteredQuestions = filteredQuestions.slice(0, 10);
-  }
+  if (filteredQuestions.length > 10) filteredQuestions = filteredQuestions.slice(0, 10);
 
   userState[chatId] = {
-    subject: subject,
-    level: level,
-    questions: filteredQuestions,
-    index: 0,
-    score: 0,
-    total: filteredQuestions.length,
-    correct: 0,
-    wrong: 0,
-    timer: null
+    subject: subject, level: level, questions: filteredQuestions,
+    index: 0, score: 0, total: filteredQuestions.length, correct: 0, wrong: 0, timer: null
   };
 
   sendQuestion(chatId);
 }
 
-// ============= TAYMERNI TOZALASH =============
 function clearQuestionTimer(chatId) {
   if (userState[chatId] && userState[chatId].timer) {
     clearTimeout(userState[chatId].timer);
@@ -422,10 +529,8 @@ function clearQuestionTimer(chatId) {
   }
 }
 
-// ============= SAVOL YUBORISH =============
 function sendQuestion(chatId) {
   clearQuestionTimer(chatId);
-
   const state = userState[chatId];
   
   if (!state || state.index >= state.total) {
@@ -434,30 +539,24 @@ function sendQuestion(chatId) {
   }
 
   const q = state.questions[state.index];
-  const progress = `📊 ${state.index + 1}/${state.total}`;
-  
   const levelEmoji = { 'easy': '🔰', 'medium': '⚡', 'hard': '🔥' };
 
-  const message = `${progress} ${levelEmoji[state.level] || '🎯'} ${subjectNames[state.subject] || ''}
+  const message = `📊 ${state.index + 1}/${state.total} ${levelEmoji[state.level] || '🎯'} ${subjectNames[state.subject] || ''}
 
 ❓ <b>${q.question}</b>
 
-⏱ <i>Javob berish uchun 30 soniya vaqtingiz bor!</i>
-
-Variantlardan birini tanlang:`;
+⏱ <i>Javob berish uchun 30 soniya vaqtingiz bor!</i>`;
 
   const opts = {
     reply_markup: {
       keyboard: q.options.map(opt => [{ text: opt }]),
-      resize_keyboard: true,
-      one_time_keyboard: false
+      resize_keyboard: true
     },
     parse_mode: 'HTML'
   };
 
   bot.sendMessage(chatId, message, opts);
 
-  // 30 soniyalik taymer o'rnatamiz
   state.timer = setTimeout(() => {
     bot.sendMessage(chatId, `⏰ <b>Vaqt tugadi!</b> Javob noto'g'ri deb hisoblandi.`, { parse_mode: 'HTML' });
     state.wrong++;
@@ -466,23 +565,16 @@ Variantlardan birini tanlang:`;
   }, 30000);
 }
 
-// ============= JAVOB TEKSHIRISH =============
 function checkAnswer(chatId, text) {
   const state = userState[chatId];
-  
   if (!state) return;
-
   const q = state.questions[state.index];
-  
   if (!q.options.includes(text)) return;
 
   clearQuestionTimer(chatId);
 
-  const isCorrect = text === q.answer;
-  
-  if (isCorrect) {
-    state.score++;
-    state.correct++;
+  if (text === q.answer) {
+    state.score++; state.correct++;
     bot.sendMessage(chatId, "✅ <b>To'g'ri!</b> 🎉", { parse_mode: 'HTML' });
   } else {
     state.wrong++;
@@ -490,21 +582,16 @@ function checkAnswer(chatId, text) {
   }
 
   state.index++;
-  
-  setTimeout(() => {
-    sendQuestion(chatId);
-  }, 800);
+  setTimeout(() => sendQuestion(chatId), 800);
 }
 
-// ============= TEST TUGASHI =============
 function finishTest(chatId) {
   clearQuestionTimer(chatId);
-
   const state = userState[chatId];
   if (!state) return;
 
-  const total = state.total;
   const score = state.score;
+  const total = state.total;
   const percentage = Math.round((score / total) * 100);
 
   if (userStats[chatId]) {
@@ -512,37 +599,15 @@ function finishTest(chatId) {
     userStats[chatId].testsPassed += 1;
     userStats[chatId].correctAnswers += state.correct;
     userStats[chatId].wrongAnswers += state.wrong;
-
-    // Fan bo'yicha alohida ball yig'ish
     if (!userStats[chatId].subjectScores) {
       userStats[chatId].subjectScores = { math: 0, english: 0, russian: 0, logic: 0, geography: 0, history: 0 };
     }
     userStats[chatId].subjectScores[state.subject] = (userStats[chatId].subjectScores[state.subject] || 0) + score;
   }
 
-  let emoji = '😊';
-  let message = '';
-  
-  if (percentage >= 80) {
-    emoji = '🏆';
-    message = "Ajoyib! Siz bu fanni mukammal bilasiz!";
-  } else if (percentage >= 60) {
-    emoji = '⭐';
-    message = "Yaxshi! O'z ustingizda ishlang!";
-  } else if (percentage >= 40) {
-    emoji = '📚';
-    message = "Ko'proq mashq qiling!";
-  } else {
-    emoji = '💪';
-    message = "Harakat qiling! O'z ustingizda ishlang!";
-  }
-
   const resultMsg = `🎯 <b>Test yakunlandi!</b>
 
-${emoji} <b>Natija:</b> ${score}/${total}
-📊 <b>Foiz:</b> ${percentage}%
-💬 <b>Xulosa:</b> ${message}
-
+Natija: <b>${score}/${total} (${percentage}%)</b>
 ✅ To'g'ri: ${state.correct} ta
 ❌ Noto'g'ri: ${state.wrong} ta
 
@@ -551,13 +616,9 @@ Umumiy ballingiz: ${userStats[chatId]?.totalScore || 0}`;
   delete userState[chatId];
   delete userSubjects[chatId];
 
-  bot.sendMessage(chatId, resultMsg, { 
-    parse_mode: 'HTML',
-    ...getMainMenu(chatId)
-  });
+  bot.sendMessage(chatId, resultMsg, { parse_mode: 'HTML', ...getMainMenu(chatId) });
 }
 
-// ============= YORDAMCHI FUNKSIYALAR =============
 function shuffleArray(array) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -566,9 +627,5 @@ function shuffleArray(array) {
   return array;
 }
 
-// ============= XATOLIKLARNI USHLASH =============
-bot.on('polling_error', (error) => {
-  console.error('Polling error:', error.message);
-});
-
+bot.on('polling_error', (err) => console.error('Polling error:', err.message));
 console.log('🚀 Bot ishga tushdi!');
